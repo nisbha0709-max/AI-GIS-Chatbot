@@ -1,0 +1,2102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart GIS Voice Assistant - Tamil Nadu</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: #4285F4;
+            --primary-dark: #3367D6;
+            --secondary: #34A853;
+            --accent: #EA4335;
+            --warning: #FBBC05;
+            --bg-dark: #1a1a2e;
+            --bg-light: #16213e;
+            --surface: #0f3460;
+            --text-primary: #ffffff;
+            --text-secondary: #b0b0b0;
+            --border: rgba(255, 255, 255, 0.1);
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            --radius: 16px;
+            --chat-width: 420px;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+        }
+        #app { position: relative; width: 100vw; height: 100vh; }
+        #map-container {
+            position: absolute; top: 0; left: 0; right: var(--chat-width);
+            height: 100%; z-index: 1;
+        }
+        #chat-panel {
+            position: absolute; top: 0; right: 0; width: var(--chat-width);
+            height: 100%; background: linear-gradient(180deg, var(--bg-light) 0%, var(--bg-dark) 100%);
+            display: flex; flex-direction: column; z-index: 1000;
+            box-shadow: -4px 0 24px rgba(0, 0, 0, 0.4); border-left: 1px solid var(--border);
+        }
+        #chat-header {
+            padding: 16px 20px; background: var(--surface); border-bottom: 1px solid var(--border);
+        }
+        .chat-title { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+        .chat-title i { font-size: 24px; color: var(--primary); }
+        .chat-title h1 { font-size: 18px; font-weight: 600; }
+        .chat-status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
+        .status-dot { width: 8px; height: 8px; background: var(--secondary); border-radius: 50%; }
+        #language-selector {
+            display: flex; gap: 8px; padding: 8px 20px; background: var(--bg-light);
+            border-bottom: 1px solid var(--border); flex-wrap: wrap;
+        }
+        .lang-btn {
+            padding: 6px 12px; border: 1px solid var(--border); background: transparent;
+            color: var(--text-secondary); border-radius: 20px; cursor: pointer;
+            font-size: 12px; transition: all 0.2s;
+        }
+        .lang-btn:hover { border-color: var(--primary); color: var(--primary); }
+        .lang-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+        #chat-messages {
+            flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px;
+        }
+        .message {
+            max-width: 85%; padding: 12px 16px; border-radius: 16px; font-size: 14px; line-height: 1.5;
+        }
+        .message.user {
+            align-self: flex-end; background: var(--primary); color: white;
+            border-bottom-right-radius: 4px;
+        }
+        .message.bot {
+            align-self: flex-start; background: var(--surface); color: var(--text-primary);
+            border-bottom-left-radius: 4px;
+        }
+        .message .voice-toggle { cursor: pointer; margin-left: 8px; opacity: 0.7; }
+        .message .voice-toggle:hover { opacity: 1; }
+        .route-info {
+            background: var(--bg-light); padding: 12px; border-radius: 8px; margin-top: 8px;
+            border-left: 3px solid var(--primary);
+        }
+        .route-step {
+            display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border);
+            font-size: 13px;
+        }
+        .route-step:last-child { border-bottom: none; }
+        .step-num { 
+            width: 24px; height: 24px; background: var(--primary); border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;
+        }
+        #chat-input-container {
+            padding: 16px 20px; background: var(--surface); border-top: 1px solid var(--border);
+        }
+        .input-wrapper { display: flex; gap: 8px; margin-bottom: 12px; }
+        #chat-input {
+            flex: 1; padding: 12px 16px; background: var(--bg-dark); border: 1px solid var(--border);
+            border-radius: 24px; color: var(--text-primary); font-size: 14px; outline: none;
+        }
+        #chat-input:focus { border-color: var(--primary); }
+        .input-btn {
+            width: 44px; height: 44px; border: none; border-radius: 50%; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; font-size: 16px;
+            transition: all 0.2s;
+        }
+        #send-btn { background: var(--primary); color: white; }
+        #send-btn:hover { background: var(--primary-dark); }
+        #mic-btn { background: var(--accent); color: white; }
+        #mic-btn:hover { background: #c62828; }
+        #mic-btn.listening { animation: pulse 1s infinite; }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+        .control-btn {
+            flex: 1; min-width: 100px; padding: 8px 12px; background: var(--bg-dark);
+            border: 1px solid var(--border); border-radius: 8px; color: var(--text-secondary);
+            font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
+        }
+        .control-btn:hover { border-color: var(--primary); color: var(--primary); }
+        .control-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+        #loading-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.7); display: flex; align-items: center;
+            justify-content: center; z-index: 2000;
+        }
+        #loading-overlay.hidden { display: none; }
+        .loader { text-align: center; }
+        .spinner {
+            width: 50px; height: 50px; border: 3px solid var(--border);
+            border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loader p { margin-top: 16px; color: var(--text-secondary); }
+        #toast-container {
+            position: fixed; bottom: 100px; left: 20px; z-index: 3000;
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .toast {
+            background: var(--surface); padding: 12px 20px; border-radius: 8px;
+            box-shadow: var(--shadow); animation: slideIn 0.3s ease; max-width: 300px;
+        }
+        .toast.success { border-left: 4px solid var(--secondary); }
+        .toast.error { border-left: 4px solid var(--accent); }
+        .toast.info { border-left: 4px solid var(--primary); }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(-20px); } }
+        #navigation-panel {
+            position: absolute; bottom: 20px; left: 20px; background: var(--surface);
+            border-radius: var(--radius); padding: 16px; max-width: 350px; z-index: 500;
+            box-shadow: var(--shadow); display: none;
+        }
+        #navigation-panel.show { display: block; }
+        .nav-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .nav-header h3 { font-size: 14px; }
+        .nav-close { background: none; border: none; color: var(--text-secondary); cursor: pointer; }
+        .nav-route { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+        .nav-point { flex: 1; }
+        .nav-point label { font-size: 11px; color: var(--text-secondary); }
+        .nav-point input {
+            width: 100%; padding: 8px; background: var(--bg-dark); border: 1px solid var(--border);
+            border-radius: 8px; color: var(--text-primary); font-size: 13px; margin-top: 4px;
+        }
+        .nav-arrow { color: var(--primary); font-size: 20px; }
+        .nav-instructions { max-height: 200px; overflow-y: auto; }
+        .nav-step {
+            display: flex; gap: 10px; padding: 8px; border-radius: 8px; font-size: 13px;
+            border-bottom: 1px solid var(--border);
+        }
+        .nav-step:last-child { border-bottom: none; }
+        .nav-step.active { background: var(--bg-light); }
+        .step-icon { width: 28px; height: 28px; background: var(--primary); border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; font-size: 12px; }
+        
+        #history-panel {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--bg-dark); z-index: 1001; display: none; flex-direction: column;
+        }
+        #history-panel.show { display: flex; }
+        .history-header {
+            padding: 16px 20px; background: var(--surface); border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .history-header h3 { font-size: 16px; display: flex; align-items: center; gap: 10px; }
+        .history-close { background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 18px; }
+        .history-actions { padding: 12px 20px; border-bottom: 1px solid var(--border); }
+        #history-list { flex: 1; overflow-y: auto; padding: 12px; }
+        .history-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 16px; background: var(--surface); border-radius: 12px; margin-bottom: 8px;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .history-item:hover { background: var(--bg-light); }
+        .history-item-content { flex: 1; overflow: hidden; }
+        .history-item-title { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .history-item-meta { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+        .history-item-actions { display: flex; gap: 8px; }
+        .history-load-btn, .history-delete-btn {
+            width: 32px; height: 32px; border: none; border-radius: 8px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+        }
+        .history-load-btn { background: var(--primary); color: white; }
+        .history-load-btn:hover { background: var(--primary-dark); }
+        .history-delete-btn { background: transparent; color: var(--text-secondary); }
+        .history-delete-btn:hover { color: var(--accent); }
+        .history-empty { text-align: center; padding: 40px 20px; color: var(--text-secondary); }
+        
+        @media (max-width: 768px) {
+            #map-container { right: 0; bottom: 50%; }
+            #chat-panel { bottom: 0; top: auto; height: 50%; width: 100%; }
+            :root { --chat-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div id="map-container"></div>
+        
+        <div id="chat-panel">
+            <div id="chat-header">
+                <div class="chat-title">
+                    <i class="fas fa-map-marked-alt"></i>
+                    <h1>Smart GIS Voice Assistant</h1>
+                </div>
+                <div class="chat-status">
+                    <span class="status-dot"></span>
+                    <span>Tamil Nadu Accident Analysis</span>
+                </div>
+            </div>
+            
+            <div id="language-selector">
+                <button class="lang-btn active" data-lang="en">English</button>
+                <button class="lang-btn" data-lang="ta">தமிழ்</button>
+                <button class="lang-btn" data-lang="te">తెలుగు</button>
+                <button class="lang-btn" data-lang="hi">हिंदी</button>
+            </div>
+            
+            <div id="chat-messages">
+                <div class="message bot">
+                    Welcome! I'm your Smart GIS Assistant. Ask me about accidents, routes, or anything in Tamil Nadu!
+                    <br><small style="opacity:0.7">வரவேற்பு! நான் உங்கள் Smart GIS உதவியாளர். விபத்துகள், வழிகள் அல்லது தமிழ்நாட்டில் ஏதேனும் கேளுங்கள்!</small>
+                </div>
+            </div>
+            
+            <div id="history-panel">
+                <div class="history-header">
+                    <h3><i class="fas fa-history"></i> Conversation History</h3>
+                    <button class="history-close" id="history-close"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="history-actions">
+                    <button class="control-btn active" id="new-session-btn" style="width:100%;">
+                        <i class="fas fa-plus"></i> New Conversation
+                    </button>
+                </div>
+                <div id="history-list"></div>
+            </div>
+            
+            <div id="chat-input-container">
+                <div class="input-wrapper">
+                    <input type="text" id="chat-input" placeholder="Type or speak your query..." />
+                    <button class="input-btn" id="send-btn" title="Send">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                    <button class="input-btn" id="mic-btn" title="Voice Input">
+                        <i class="fas fa-microphone"></i>
+                    </button>
+                </div>
+                <div class="controls">
+                    <button class="control-btn" id="voice-toggle">
+                        <i class="fas fa-volume-up"></i> Voice
+                    </button>
+                    <button class="control-btn" id="history-btn">
+                        <i class="fas fa-history"></i> History
+                    </button>
+                    <button class="control-btn" id="location-btn">
+                        <i class="fas fa-location-crosshairs"></i> My Location
+                    </button>
+                    <button class="control-btn" id="hospital-btn">
+                        <i class="fas fa-hospital"></i> Hospitals
+                    </button>
+                    <button class="control-btn" id="aqi-btn">
+                        <i class="fas fa-wind"></i> AQI
+                    </button>
+                    <button class="control-btn" id="route-btn">
+                        <i class="fas fa-route"></i> Route
+                    </button>
+                    <button class="control-btn" id="clear-btn">
+                        <i class="fas fa-eraser"></i> Clear
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="navigation-panel">
+            <div class="nav-header">
+                <h3><i class="fas fa-route"></i> Route Planning</h3>
+                <button class="nav-close" id="nav-close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="nav-route">
+                <div class="nav-point">
+                    <label>From</label>
+                    <input type="text" id="route-start" placeholder="Start location" />
+                </div>
+                <i class="fas fa-arrow-right nav-arrow"></i>
+                <div class="nav-point">
+                    <label>To</label>
+                    <input type="text" id="route-end" placeholder="Destination" />
+                </div>
+            </div>
+            <button class="control-btn active" id="calc-route" style="width:100%;margin-bottom:12px;">
+                <i class="fas fa-search"></i> Calculate Route
+            </button>
+            <div class="nav-instructions" id="nav-instructions"></div>
+        </div>
+        
+        <div id="loading-overlay" class="hidden">
+            <div class="loader">
+                <div class="spinner"></div>
+                <p>Processing...</p>
+            </div>
+        </div>
+        
+        <div id="toast-container"></div>
+    </div>
+    
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+    // =====================================================
+    // CONFIGURATION
+    // =====================================================
+    const CONFIG = {
+        map: { center: [11.1271, 78.6569], zoom: 7 },
+        osrm: 'https://router.project-osrm.org',
+        nominatim: 'https://nominatim.openstreetmap.org',
+        translation: 'https://api.mymemory.translated.net',
+        waqi: 'https://api.waqi.info'
+    };
+
+    // Language configurations
+    const LANGUAGES = {
+        en: { name: 'English', code: 'en-US', dir: 'ltr', translations: {} },
+        ta: { name: 'Tamil', code: 'ta-IN', dir: 'ltr', translations: {} },
+        te: { name: 'Telugu', code: 'te-IN', dir: 'ltr', translations: {} },
+        hi: { name: 'Hindi', code: 'hi-IN', dir: 'ltr', translations: {} }
+    };
+
+    // =====================================================
+    // TRANSLATIONS
+    // =====================================================
+    const TRANSLATIONS = {
+        en: {
+            welcome: "Welcome! I'm your Smart GIS Assistant. Ask me about accidents, routes, or anything in Tamil Nadu!",
+            loading: "Loading...",
+            routeFound: "Route found! Distance: {distance}, Duration: {duration}",
+            noRoute: "No route found between the specified locations",
+            locationDetected: "Your location detected: {lat}, {lng}",
+            locationDenied: "Location access denied. Please enable location permissions.",
+            accidentData: "Found {count} accidents. {fatal} fatal, {major} major, {minor} minor.",
+            hotspotArea: "High accident concentration in {area}",
+            askRoute: "Where would you like to go?",
+            turnLeft: "Turn left",
+            turnRight: "Turn right",
+            continue: "Continue straight",
+            arrived: "You have arrived at your destination",
+            processing: "Processing your request...",
+            voiceEnabled: "Voice output enabled",
+            voiceDisabled: "Voice output disabled",
+            dataLoaded: "Accident data loaded successfully",
+            noResults: "No results found for your query"
+        },
+        ta: {
+            welcome: "வரவேற்பு! நான் உங்கள் Smart GIS உதவியாளர். விபத்துகள், வழிகள் அல்லது தமிழ்நாட்டில் ஏதேனும் கேளுங்கள்!",
+            loading: "ஏற்றுகிறது...",
+            routeFound: "வழி கண்டறியப்பட்டது! தூரம்: {distance}, நேரம்: {duration}",
+            noRoute: "குறிப்பிட்ட இடங்களுக்கு இடையில் வழி கண்டறியப்படவில்லை",
+            locationDetected: "உங்கள் இருப்பிடம் கண்டறியப்பட்டது: {lat}, {lng}",
+            locationDenied: "இருப்பிட அணுகல் மறுக்கப்பட்டது. இருப்பிட அனுமதிகளை இயக்கவும்.",
+            accidentData: "{count} விபத்துகள் கண்டறியப்பட்டன. {fatal} உயிர்ப்பலி, {major} பெரும், {minor} சிறு.",
+            hotspotArea: "{area} பகுதியில் விபத்துக்கள் அதிகம்",
+            askRoute: "நீங்கள் எங்கு செல்ல விரும்புகிறீர்கள்?",
+            turnLeft: "இடதுபுறம் திரும்பவும்",
+            turnRight: "வலதுபுறம் திரும்பவும்",
+            continue: "நேராக தொடரவும்",
+            arrived: "நீங்கள் இலக்கை அடைந்தீர்கள்",
+            processing: "உங்கள் கோரிக்கையை செயல்படுத்துகிறோம்...",
+            voiceEnabled: "குரல் வெளியீடு இயக்கப்பட்டது",
+            voiceDisabled: "குரல் வெளியீடு முடக்கப்பட்டது",
+            dataLoaded: "விபத்து தரவு வெற்றிகரமாக ஏற்றப்பட்டது",
+            noResults: "உங்கள் கோரிக்கைக்கு முடிவுகள் எதுவும் கிடைக்கவில்லை"
+        },
+        te: {
+            welcome: "స్వాగతం! నేను మీ Smart GIS సహాయకుడిని. ప్రమాదాలు, మార్గాలు లేదా తమిళనాడులో ఏదైనా అడగండి!",
+            loading: "లోడ్ అవుతోంది...",
+            routeFound: "మార్గం కనుగొనబడింది! దూరం: {distance}, వ్యవధి: {duration}",
+            noRoute: "నిర్దిష్టమైన ప్రదేశాల మధ్య మార్గం కనుగొనబడలేదు",
+            locationDetected: "మీ స్థానం గుర్తించబడింది: {lat}, {lng}",
+            locationDenied: "స్థాన యాక్సెస్ నిరాకరించబడింది. దయచేసి స్థాన అనుమతులను ప్రారంభించండి.",
+            accidentData: "{count} ప్రమాదాలు కనుగొనబడ్డాయి. {fatal} మరణాలు, {major} పెద్ద, {minor} చిన్న.",
+            hotspotArea: "{area} ప్రాంతంలో అధిక ప్రమాద సాంద్రత",
+            askRoute: "మీరు ఎక్కడికి వెళ్ళాలనుకుంటున్నారు?",
+            turnLeft: "ఎడమవైపు తిరుగు",
+            turnRight: "కుడివైపు తిరుగు",
+            continue: "నేరుగా కొనసాగండి",
+            arrived: "మీ గమ్యస్థానానికి చేరుకున్నారు",
+            processing: "మీ అభ్యర్థనను ప్రాసెస్ చేస్తున్నాం...",
+            voiceEnabled: "వాయిస్ అవుట్‌పుట్ ప్రారంభించబడింది",
+            voiceDisabled: "వాయిస్ అవుట్‌పుట్ నిలిపివేయబడింది",
+            dataLoaded: "ప్రమాద డేటా విజయవంతంగా లోడ్ చేయబడింది",
+            noResults: "మీ ప్రశ్నకు ఫలితాలు కనుగొనబడలేదు"
+        },
+        hi: {
+            welcome: "स्वागत है! मैं आपका Smart GIS सहायक हूं। दुर्घटनाओं, रास्तों या तमिलनाडु में कुछ भी पूछें!",
+            loading: "लोड हो रहा है...",
+            routeFound: "रास्ता मिला! दूरी: {distance}, अवधि: {duration}",
+            noRoute: "निर्दिष्ट स्थानों के बीच कोई रास्ता नहीं मिला",
+            locationDetected: "आपका स्थान पाया गया: {lat}, {lng}",
+            locationDenied: "स्थान पहुंच अस्वीकृत। कृपया स्थान अनुमतियां सक्षम करें।",
+            accidentData: "{count} दुर्घटनाएं मिलीं। {fatal} घातक, {major} बड़ी, {minor} छोटी।",
+            hotspotArea: "{area} क्षेत्र में उच्च दुर्घटना सांद्रता",
+            askRoute: "आप कहां जाना चाहेंगे?",
+            turnLeft: "बाएं मुड़ें",
+            turnRight: "दाएं मुड़ें",
+            continue: "सीधे जारी रखें",
+            arrived: "आप अपने गंतव्य पर पहुंच गए",
+            processing: "आपका अनुरोध प्रोसेस हो रहा है...",
+            voiceEnabled: "आवाज आउटपुट सक्षम",
+            voiceDisabled: "आवाज आउटपुट अक्षम",
+            dataLoaded: "दुर्घटना डेटा सफलतापूर्वक लोड",
+            noResults: "आपकी क्वेरी के लिए कोई परिणाम नहीं मिला"
+        }
+    };
+
+    // =====================================================
+    // APP STATE
+    // =====================================================
+    const state = {
+        map: null,
+        userLocation: null,
+        accidentLayer: null,
+        routeLayer: null,
+        currentLang: 'en',
+        voiceEnabled: false,
+        isListening: false,
+        accidentData: [],
+        routeCoords: [],
+        history: [],
+        currentSessionId: Date.now()
+    };
+
+    // =====================================================
+    // HISTORY FUNCTIONS
+    // =====================================================
+    function loadHistory() {
+        const stored = localStorage.getItem('chatHistory');
+        if (stored) {
+            state.history = JSON.parse(stored);
+        } else {
+            state.history = [];
+        }
+    }
+
+    function saveCurrentSession(messages) {
+        if (!messages || messages.length === 0) return;
+        
+        const firstUserMsg = messages.find(m => m.type === 'user');
+        const sessionName = firstUserMsg ? firstUserMsg.content.substring(0, 30) + (firstUserMsg.content.length > 30 ? '...' : '') : 'Conversation ' + new Date().toLocaleDateString();
+        
+        const session = {
+            id: state.currentSessionId,
+            name: sessionName,
+            timestamp: new Date().toISOString(),
+            messages: messages
+        };
+        
+        const existingIndex = state.history.findIndex(h => h.id === session.id);
+        if (existingIndex >= 0) {
+            state.history[existingIndex] = session;
+        } else {
+            state.history.unshift(session);
+            if (state.history.length > 20) {
+                state.history = state.history.slice(0, 20);
+            }
+        }
+        
+        localStorage.setItem('chatHistory', JSON.stringify(state.history));
+    }
+
+    function updateHistoryUI() {
+        const historyList = document.getElementById('history-list');
+        if (!historyList) return;
+        
+        if (state.history.length === 0) {
+            historyList.innerHTML = '<div class="history-empty">No conversation history</div>';
+            return;
+        }
+        
+        historyList.innerHTML = state.history.map(session => {
+            const date = new Date(session.timestamp);
+            const dateStr = date.toLocaleDateString();
+            const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const msgCount = session.messages.length;
+            
+            return `
+                <div class="history-item" data-id="${session.id}">
+                    <div class="history-item-content">
+                        <div class="history-item-title">${session.name}</div>
+                        <div class="history-item-meta">${dateStr} at ${timeStr} • ${msgCount} messages</div>
+                    </div>
+                    <div class="history-item-actions">
+                        <button class="history-load-btn" data-id="${session.id}" title="Load">
+                            <i class="fas fa-folder-open"></i>
+                        </button>
+                        <button class="history-delete-btn" data-id="${session.id}" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        historyList.querySelectorAll('.history-load-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                loadSession(parseInt(btn.dataset.id));
+                document.getElementById('history-panel').classList.remove('show');
+            });
+        });
+
+        historyList.querySelectorAll('.history-delete-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (confirm('Delete this conversation?')) {
+                    deleteSession(parseInt(btn.dataset.id));
+                }
+            });
+        });
+    }
+
+    function loadSession(sessionId) {
+        const session = state.history.find(h => h.id === sessionId);
+        if (session) {
+            const messages = document.getElementById('chat-messages');
+            messages.innerHTML = session.messages.map(msg => `
+                <div class="message ${msg.type}">
+                    ${msg.type === 'bot' ? msg.content + `<span class="voice-toggle" onclick="speak(\`${msg.content.replace(/'/g, "\\'")}\`)"><i class="fas fa-volume-up"></i></span>` : msg.content}
+                </div>
+            `).join('');
+            messages.scrollTop = messages.scrollHeight;
+            state.currentSessionId = session.id;
+            showToast('Conversation loaded', 'success');
+        }
+    }
+
+    function deleteSession(sessionId) {
+        state.history = state.history.filter(h => h.id !== sessionId);
+        localStorage.setItem('chatHistory', JSON.stringify(state.history));
+        updateHistoryUI();
+    }
+
+    function startNewSession() {
+        const messages = document.getElementById('chat-messages');
+        const currentMessages = [];
+        messages.querySelectorAll('.message').forEach(msg => {
+            const type = msg.classList.contains('user') ? 'user' : 'bot';
+            let content = msg.innerHTML;
+            if (type === 'bot') {
+                content = content.replace(/<span class="voice-toggle"[^>]*>.*?<\/span>/g, '');
+            }
+            currentMessages.push({ type, content });
+        });
+        saveCurrentSession(currentMessages);
+        
+        state.currentSessionId = Date.now();
+        messages.innerHTML = `
+            <div class="message bot">
+                Welcome! I'm your Smart GIS Assistant. Ask me about accidents, routes, or anything in Tamil Nadu!
+                <br><small style="opacity:0.7">வரவேற்பு! நான் உங்கள் Smart GIS உதவியாளர். விபத்துகள், வழிகள் அல்லது தமிழ்நாட்டில் ஏதேனும் கேளுங்கள்!</small>
+            </div>
+        `;
+    }
+
+    loadHistory();
+
+    // =====================================================
+    // UTILITY FUNCTIONS
+    // =====================================================
+    function showLoading(show) {
+        document.getElementById('loading-overlay').classList.toggle('hidden', !show);
+    }
+
+    function showToast(message, type = 'info') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        container.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+
+    function t(key, replacements = {}) {
+        let text = TRANSLATIONS[state.currentLang]?.[key] || TRANSLATIONS.en[key] || key;
+        for (const [k, v] of Object.entries(replacements)) {
+            text = text.replace(`{${k}}`, v);
+        }
+        return text;
+    }
+
+    function formatDistance(meters) {
+        if (meters < 1000) return `${Math.round(meters)} m`;
+        return `${(meters / 1000).toFixed(1)} km`;
+    }
+
+    function formatDuration(seconds) {
+        if (seconds < 60) return `${Math.round(seconds)} sec`;
+        if (seconds < 3600) return `${Math.round(seconds / 60)} min`;
+        return `${Math.floor(seconds / 3600)}h ${Math.round((seconds % 3600) / 60)}m`;
+    }
+
+    // =====================================================
+    // MAP INITIALIZATION
+    // =====================================================
+    function initMap() {
+        state.map = L.map('map-container', {
+            center: CONFIG.map.center,
+            zoom: CONFIG.map.zoom,
+            zoomControl: true
+        });
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(state.map);
+
+        L.control.layers({
+            'OSM': L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'),
+            'Satellite': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'),
+            'Terrain': L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png')
+        }).addTo(state.map);
+
+        // Add click handler for coordinates
+        state.map.on('click', (e) => {
+            console.log('Map clicked:', e.latlng);
+        });
+    }
+
+    // =====================================================
+    // GEOLOCATION
+    // =====================================================
+    async function getUserLocation() {
+        return new Promise((resolve, reject) => {
+            if (!navigator.geolocation) {
+                reject(new Error('Geolocation not supported'));
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                    state.userLocation = loc;
+                    resolve(loc);
+                },
+                (err) => {
+                    if (err.code === err.PERMISSION_DENIED) {
+                        reject(new Error('Location permission denied'));
+                    } else if (err.code === err.TIMEOUT) {
+                        reject(new Error('Location request timed out'));
+                    } else {
+                        reject(err);
+                    }
+                },
+                { enableHighAccuracy: true, timeout: 30000 }
+            );
+        });
+    }
+
+    function showUserOnMap(lat, lng) {
+        // Remove existing marker
+        state.map.eachLayer((layer) => {
+            if (layer instanceof L.Marker && layer.options.title === 'Your Location') {
+                state.map.removeLayer(layer);
+            }
+        });
+
+        const icon = L.divIcon({
+            html: '<div style="background:#4285F4;width:20px;height:20px;border-radius:50%;border:3px solid white;box-shadow:0 2px 10px rgba(0,0,0,0.3)"></div>',
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+        });
+
+        L.marker([lat, lng], { icon, title: 'Your Location' })
+            .bindPopup(`Your Location<br>${lat.toFixed(6)}, ${lng.toFixed(6)}`)
+            .addTo(state.map);
+
+        state.map.setView([lat, lng], 14);
+    }
+
+    // =====================================================
+    // ACCIDENT DATA
+    // =====================================================
+    async function loadAccidentData() {
+        try {
+            showLoading(true);
+            const response = await fetch('./datasets/tamilnadu_accidents.geojson');
+            const geojson = await response.json();
+            state.accidentData = geojson.features || [];
+            showLoading(false);
+            showToast(t('dataLoaded'), 'success');
+            return state.accidentData;
+        } catch (error) {
+            showLoading(false);
+            showToast('Error loading accident data', 'error');
+            return [];
+        }
+    }
+
+    function displayAccidents(features) {
+        if (state.accidentLayer) {
+            state.map.removeLayer(state.accidentLayer);
+        }
+
+        state.accidentLayer = L.geoJSON({
+            type: 'FeatureCollection',
+            features: features
+        }, {
+            pointToLayer: (feature, latlng) => {
+                const sev = feature.properties.severity || 'Minor';
+                const color = sev === 'Fatal' ? '#d32f2f' : sev === 'Major' ? '#f57c00' : '#4caf50';
+                return L.circleMarker(latlng, {
+                    radius: 8,
+                    fillColor: color,
+                    color: '#fff',
+                    weight: 2,
+                    fillOpacity: 0.8
+                });
+            },
+            onEachFeature: (feature, layer) => {
+                const p = feature.properties;
+                layer.bindPopup(`
+                    <b>${p.district || 'Accident'}</b><br>
+                    Severity: ${p.severity}<br>
+                    Date: ${p.date}<br>
+                    Time: ${p.time}<br>
+                    Cause: ${p.cause}<br>
+                    Road: ${p.roadtype}<br>
+                    Fatalities: ${p.fatals || 0}<br>
+                    Injuries: ${p.injuries || 0}
+                `);
+            }
+        }).addTo(state.map);
+
+        state.map.fitBounds(state.accidentLayer.getBounds(), { padding: [30, 30] });
+    }
+
+    // =====================================================
+    // ROUTE PLANNING (OSRM)
+    // =====================================================
+    async function geocode(query) {
+        try {
+            const response = await fetch(
+                `${CONFIG.nominatim}/search?format=json&q=${encodeURIComponent(query)}&limit=1`,
+                { headers: { 'Accept-Language': 'en' } }
+            );
+            const data = await response.json();
+            if (data.length > 0) {
+                return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+            }
+            return null;
+        } catch (error) {
+            console.error('Geocoding error:', error);
+            return null;
+        }
+    }
+
+    async function calculateRoute(start, end) {
+        try {
+            showLoading(true);
+            const response = await fetch(
+                `${CONFIG.osrm}/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?steps=true&overview=full`
+            );
+            const data = await response.json();
+            showLoading(false);
+
+            if (data.routes && data.routes.length > 0) {
+                const route = data.routes[0];
+                return {
+                    distance: route.distance,
+                    duration: route.duration,
+                    geometry: route.geometry,
+                    steps: route.legs[0].steps.map(s => ({
+                        instruction: s.maneuver?.instruction || s.maneuver?.type || 'Continue',
+                        distance: s.distance,
+                        duration: s.duration,
+                        name: s.name || '',
+                        type: s.maneuver?.type || 'continue',
+                        modifier: s.maneuver?.modifier || ''
+                    }))
+                };
+            }
+            return null;
+        } catch (error) {
+            showLoading(false);
+            console.error('Routing error:', error);
+            return null;
+        }
+    }
+
+    function displayRoute(route) {
+        if (state.routeLayer) {
+            state.map.removeLayer(state.routeLayer);
+        }
+
+        // Decode polyline
+        const coords = decodePolyline(route.geometry);
+        state.routeCoords = coords;
+
+        state.routeLayer = L.polyline(coords, {
+            color: '#4285F4',
+            weight: 5,
+            opacity: 0.8
+        }).addTo(state.map);
+
+        state.map.fitBounds(state.routeLayer.getBounds(), { padding: [50, 50] });
+
+        // Add markers for start and end
+        if (coords.length > 0) {
+            L.marker(coords[0], {
+                icon: L.divIcon({
+                    html: '<div style="background:#34A853;width:24px;height:24px;border-radius:50%;border:3px solid white;display:flex;align-items:center;justify-content:center"><i class="fas fa-play" style="color:white;font-size:10px"></i></div>',
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12]
+                })
+            }).addTo(state.map);
+
+            L.marker(coords[coords.length - 1], {
+                icon: L.divIcon({
+                    html: '<div style="background:#EA4335;width:24px;height:24px;border-radius:50%;border:3px solid:white;display:flex;align-items:center;justify-content:center"><i class="fas fa-flag-checkered" style="color:white;font-size:10px"></i></div>',
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12]
+                })
+            }).addTo(state.map);
+        }
+    }
+
+    function decodePolyline(encoded) {
+        const points = [];
+        let index = 0, lat = 0, lng = 0;
+
+        while (index < encoded.length) {
+            let b, shift = 0, result = 0;
+            do {
+                b = encoded.charCodeAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            const dlat = (result & 1) ? ~(result >> 1) : (result >> 1);
+            lat += dlat;
+
+            shift = 0; result = 0;
+            do {
+                b = encoded.charCodeAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            const dlng = (result & 1) ? ~(result >> 1) : (result >> 1);
+            lng += dlng;
+
+            points.push([lat / 1e5, lng / 1e5]);
+        }
+
+        return points;
+    }
+
+    function displayNavigationSteps(steps) {
+        const container = document.getElementById('nav-instructions');
+        container.innerHTML = steps.map((step, i) => `
+            <div class="nav-step">
+                <div class="step-icon">${i + 1}</div>
+                <div>
+                    <div style="font-weight:500">${step.instruction}</div>
+                    <div style="font-size:11px;color:var(--text-secondary)">${step.name || ''} • ${formatDistance(step.distance)}</div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // =====================================================
+    // HOSPITAL NEARBY SEARCH (Overpass API + Nominatim fallback)
+    // =====================================================
+    async function findNearbyHospitals(lat, lng, radiusKm = 10) {
+        console.log('Searching hospitals around:', lat, lng, 'radius:', radiusKm);
+        
+        try {
+            showLoading(true);
+            
+            let hospitals = [];
+            let usingDemoData = false;
+            
+            // First try Overpass API
+            try {
+                console.log('Trying Overpass API...');
+                const overpassUrl = 'https://overpass-api.de/api/interpreter';
+                const query = `
+                    [out:json][timeout:25];
+                    (
+                      node["amenity"="hospital"](around:${radiusKm * 1000},${lat},${lng});
+                      way["amenity"="hospital"](around:${radiusKm * 1000},${lat},${lng});
+                      node["amenity"="clinic"](around:${radiusKm * 1000},${lat},${lng});
+                      way["amenity"="clinic"](around:${radiusKm * 1000},${lat},${lng});
+                    );
+                    out center;
+                `;
+                
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => {
+                    controller.abort();
+                    console.log('Overpass request timed out');
+                }, 20000);
+                
+                const response = await fetch(overpassUrl, {
+                    method: 'POST',
+                    body: query,
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                
+                console.log('Overpass response status:', response.status);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Overpass found elements:', data.elements?.length || 0);
+                    
+                    for (const element of data.elements) {
+                        let latVal, lngVal;
+                        
+                        if (element.type === 'node') {
+                            latVal = element.lat;
+                            lngVal = element.lon;
+                        } else if (element.type === 'way' && element.center) {
+                            latVal = element.center.lat;
+                            lngVal = element.center.lon;
+                        }
+                        
+                        if (latVal && lngVal) {
+                            const distance = getDistanceFromLatLonInKm(lat, lng, latVal, lngVal);
+                            hospitals.push({
+                                id: element.id,
+                                name: element.tags?.name || element.tags?.['official:name'] || 'Hospital/Clinic',
+                                lat: latVal,
+                                lng: lngVal,
+                                type: element.tags?.amenity || 'hospital',
+                                address: element.tags?.['addr:street'] ? 
+                                    `${element.tags['addr:housenumber'] || ''} ${element.tags['addr:street'] || ''}`.trim() : 
+                                    'Address not available',
+                                distance: distance
+                            });
+                        }
+                    }
+                }
+            } catch (overpassError) {
+                console.log('Overpass error:', overpassError.message);
+            }
+            
+            // If no results from Overpass, try Nominatim search
+            if (hospitals.length === 0) {
+                try {
+                    const searchUrl = `${CONFIG.nominatim}/search?format=json&q=hospital&lat=${lat}&lon=${lng}&bounded=1&viewbox=${lng-0.1},${lat+0.1},${lng+0.1},${lat-0.1}&limit=20`;
+                    
+                    const response = await fetch(searchUrl, {
+                        headers: { 'Accept-Language': 'en' }
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        
+                        for (const place of data) {
+                            if (place.type === 'hospital' || place.type === 'clinic' || 
+                                place.display_name.toLowerCase().includes('hospital') ||
+                                place.display_name.toLowerCase().includes('clinic')) {
+                                const hLat = parseFloat(place.lat);
+                                const hLng = parseFloat(place.lon);
+                                const distance = getDistanceFromLatLonInKm(lat, lng, hLat, hLng);
+                                
+                                if (distance <= radiusKm) {
+                                    hospitals.push({
+                                        id: place.place_id,
+                                        name: place.display_name.split(',')[0] || 'Hospital',
+                                        lat: hLat,
+                                        lng: hLng,
+                                        type: 'hospital',
+                                        address: place.display_name,
+                                        distance: distance
+                                    });
+                                }
+                            }
+                        }
+                    }
+                } catch (nomError) {
+                    console.log('Nominatim failed:', nomError);
+                }
+            }
+            
+            // If still no results, use fallback data for demo
+            if (hospitals.length === 0) {
+                console.log('No real hospitals found, using demo data');
+                hospitals = getDemoHospitals(lat, lng);
+            }
+            
+            showLoading(false);
+            return hospitals.sort((a, b) => a.distance - b.distance);
+            
+        } catch (error) {
+            showLoading(false);
+            console.error('Error finding hospitals:', error);
+            showToast('Could not find hospitals. Using demo data.', 'info');
+            return getDemoHospitals(lat, lng);
+        }
+    }
+
+    function getDemoHospitals(lat, lng) {
+        const demoHospitals = [
+            { name: 'Government Hospital', lat: lat + 0.008, lng: lng + 0.005, type: 'hospital' },
+            { name: 'Apollo Hospital', lat: lat - 0.012, lng: lng + 0.008, type: 'hospital' },
+            { name: 'Private Medical Clinic', lat: lat + 0.015, lng: lng - 0.003, type: 'clinic' },
+            { name: 'Community Health Center', lat: lat - 0.006, lng: lng - 0.010, type: 'hospital' },
+            { name: 'ESI Hospital', lat: lat + 0.020, lng: lng + 0.012, type: 'hospital' }
+        ];
+        
+        return demoHospitals.map(h => ({
+            id: Math.random(),
+            name: h.name,
+            lat: h.lat,
+            lng: h.lng,
+            type: h.type,
+            address: 'Address not available (Demo)',
+            distance: getDistanceFromLatLonInKm(lat, lng, h.lat, h.lng),
+            isDemo: true
+        }));
+    }
+
+    function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+        const R = 6371;
+        const dLat = deg2rad(lat2 - lat1);
+        const dLon = deg2rad(lon2 - lon1);
+        const a = 
+            Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
+
+    function deg2rad(deg) {
+        return deg * (Math.PI/180);
+    }
+
+    let hospitalLayer = null;
+    let hospitalMarkers = [];
+
+    function displayHospitals(hospitals, userLat, userLng) {
+        if (hospitalLayer) {
+            state.map.removeLayer(hospitalLayer);
+        }
+        hospitalMarkers.forEach(m => state.map.removeLayer(m));
+        hospitalMarkers = [];
+
+        const hospitalIcon = L.divIcon({
+            html: '<div style="background:#EA4335;width:24px;height:24px;border-radius:50%;border:3px solid white;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.3)"><i class="fas fa-hospital" style="color:white;font-size:12px"></i></div>',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+        });
+
+        const userIcon = L.divIcon({
+            html: '<div style="background:#4285F4;width:20px;height:20px;border-radius:50%;border:3px solid white;box-shadow:0 2px 10px rgba(0,0,0,0.3)"></div>',
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+        });
+
+        L.marker([userLat, userLng], { icon: userIcon, title: 'Your Location' })
+            .bindPopup('Your Location')
+            .addTo(state.map);
+        hospitalMarkers.push(state.map.getLayers().pop());
+
+        hospitals.forEach((h, index) => {
+            const isDemo = h.isDemo;
+            const iconColor = isDemo ? '#FBBC05' : '#EA4335';
+            const iconHtml = isDemo 
+                ? '<div style="background:#FBBC05;width:24px;height:24px;border-radius:50%;border:3px solid white;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.3)"><i class="fas fa-hospital" style="color:white;font-size:12px"></i></div>'
+                : '<div style="background:#EA4335;width:24px;height:24px;border-radius:50%;border:3px solid white;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.3)"><i class="fas fa-hospital" style="color:white;font-size:12px"></i></div>';
+            
+            const hospitalMarkerIcon = L.divIcon({
+                html: iconHtml,
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+            
+            const marker = L.marker([h.lat, h.lng], { icon: hospitalMarkerIcon, title: h.name })
+                .bindPopup(`
+                    <div style="min-width:200px">
+                        <strong style="color:${iconColor}">${h.name}</strong>
+                        ${isDemo ? '<span style="font-size:10px;background:#FBBC05;padding:2px 6px;border-radius:4px;margin-left:5px">Demo</span>' : ''}<br>
+                        <span style="font-size:12px;color:#666">${h.type}</span><br>
+                        <span style="font-size:12px">Distance: ${h.distance.toFixed(2)} km</span><br>
+                        ${h.address && h.address !== 'Address not available' ? `<span style="font-size:11px;color:#888">${h.address.substring(0, 50)}...</span>` : ''}
+                        <br><button onclick="showRouteToHospital(${h.lat},${h.lng},'${h.name.replace(/'/g, "\\'")}')" style="margin-top:8px;padding:6px 12px;background:#4285F4;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px">Get Directions</button>
+                    </div>
+                `)
+                .addTo(state.map);
+            hospitalMarkers.push(marker);
+        });
+
+        if (hospitals.length > 0) {
+            const group = L.featureGroup(hospitalMarkers);
+            state.map.fitBounds(group.getBounds(), { padding: [50, 50] });
+        }
+    }
+
+    async function showRouteToHospital(hlat, hlng, hname) {
+        const userLoc = state.userLocation || await getUserLocation();
+        if (!userLoc) {
+            showToast('Could not get your location', 'error');
+            return;
+        }
+
+        showLoading(true);
+        const route = await calculateRoute(userLoc, { lat: hlat, lng: hlng });
+        showLoading(false);
+
+        if (route) {
+            displayRoute(route);
+            displayNavigationSteps(route.steps);
+            document.getElementById('navigation-panel').classList.add('show');
+            showToast(`Route to ${hname}: ${formatDistance(route.distance)} (${formatDuration(route.duration)})`, 'success');
+        } else {
+            showToast('Could not calculate route', 'error');
+        }
+    }
+
+    function showHospitalPreview(hospitals, userLat, userLng) {
+        let previewPanel = document.getElementById('hospital-preview');
+        if (previewPanel) {
+            previewPanel.remove();
+        }
+
+        previewPanel = document.createElement('div');
+        previewPanel.id = 'hospital-preview';
+        previewPanel.style.cssText = `
+            position: absolute; bottom: 20px; left: 20px; right: 350px;
+            background: var(--surface); border-radius: var(--radius);
+            padding: 16px; z-index: 500; box-shadow: var(--shadow);
+            max-height: 300px; overflow-y: auto;
+        `;
+
+        previewPanel.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                <h3 style="font-size:16px;display:flex;align-items:center;gap:10px">
+                    <i class="fas fa-hospital" style="color:#EA4335"></i>
+                    Nearby Hospitals (${hospitals.length})
+                </h3>
+                <button onclick="document.getElementById('hospital-preview').remove()" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:18px">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+                ${hospitals.slice(0, 5).map((h, i) => `
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--bg-light);border-radius:8px;cursor:pointer"
+                         onclick="showRouteToHospital(${h.lat},${h.lng},'${h.name.replace(/'/g, "\\'")}')">
+                        <div>
+                            <div style="font-weight:500;font-size:14px">${i + 1}. ${h.name}</div>
+                            <div style="font-size:12px;color:var(--text-secondary)">${h.type} • ${h.address !== 'Address not available' ? h.address : ''}</div>
+                        </div>
+                        <div style="text-align:right">
+                            <div style="font-size:14px;font-weight:600;color:var(--primary)">${h.distance.toFixed(1)} km</div>
+                            <div style="font-size:11px;color:var(--text-secondary)">Get directions</div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            ${hospitals.length > 5 ? `<div style="margin-top:8px;text-align:center;font-size:12px;color:var(--text-secondary)">+ ${hospitals.length - 5} more hospitals (click marker to see)</div>` : ''}
+        `;
+
+        document.getElementById('app').appendChild(previewPanel);
+    }
+
+    window.showRouteToHospital = showRouteToHospital;
+
+    // =====================================================
+    // AIR QUALITY INDEX (WAQI API)
+    // =====================================================
+    async function fetchAQI(lat, lng) {
+        try {
+            showLoading(true);
+            
+            const token = 'demo';
+            const url = `${CONFIG.waqi}/feed/geo:${lat};${lng}/?token=${token}`;
+            
+            const response = await fetch(url);
+            
+            if (!response.ok) throw new Error('AQI API error');
+            
+            const data = await response.json();
+            showLoading(false);
+            
+            if (data.status === 'ok') {
+                return {
+                    aqi: data.data.aqi,
+                    city: data.data.city?.name || 'Unknown Location',
+                    dominant: data.data.dominant?.pollutant || 'N/A',
+                    time: data.data.time?.s || new Date().toISOString(),
+                    pm25: data.data.iaqi?.pm25?.v || null,
+                    pm10: data.data.iaqi?.pm10?.v || null,
+                    o3: data.data.iaqi?.o3?.v || null,
+                    no2: data.data.iaqi?.no2?.v || null,
+                    so2: data.data.iaqi?.so2?.v || null,
+                    co: data.data.iaqi?.co?.v || null
+                };
+            } else if (data.status === 'error') {
+                console.log('WAQI error, using fallback AQI data');
+                return getFallbackAQI(lat, lng);
+            }
+            
+            return getFallbackAQI(lat, lng);
+        } catch (error) {
+            showLoading(false);
+            console.error('AQI fetch error:', error);
+            return getFallbackAQI(lat, lng);
+        }
+    }
+
+    function getFallbackAQI(lat, lng) {
+        const aqiValue = Math.floor(Math.random() * 150) + 20;
+        return {
+            aqi: aqiValue,
+            city: 'Demo Location',
+            dominant: 'pm25',
+            time: new Date().toISOString(),
+            pm25: Math.floor(aqiValue * 0.7),
+            pm10: Math.floor(aqiValue * 0.5),
+            o3: Math.floor(aqiValue * 0.3),
+            no2: Math.floor(aqiValue * 0.4),
+            so2: Math.floor(aqiValue * 0.2),
+            co: Math.floor(aqiValue * 0.1),
+            isDemo: true
+        };
+    }
+
+    function getAQICategory(aqi) {
+        if (aqi <= 50) return { label: 'Good', color: '#00e400', desc: 'Air quality is satisfactory' };
+        if (aqi <= 100) return { label: 'Moderate', color: '#ffff00', desc: 'Acceptable' };
+        if (aqi <= 150) return { label: 'Unhealthy for Sensitive', color: '#ff7e00', desc: 'Sensitive groups may experience effects' };
+        if (aqi <= 200) return { label: 'Unhealthy', color: '#ff0000', desc: 'Everyone may experience effects' };
+        if (aqi <= 300) return { label: 'Very Unhealthy', color: '#8f3f97', desc: 'Health alert' };
+        return { label: 'Hazardous', color: '#7e0023', desc: 'Emergency conditions' };
+    }
+
+    let aqiMarker = null;
+
+    function displayAQIMarker(aqiData, lat, lng) {
+        if (aqiMarker) {
+            state.map.removeLayer(aqiMarker);
+        }
+
+        const category = getAQICategory(aqiData.aqi);
+        const iconColor = category.color;
+
+        const aqiIcon = L.divIcon({
+            html: `<div style="background:${iconColor};width:40px;height:40px;border-radius:50%;border:3px solid white;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,0.3);flex-direction:column">
+                <span style="color:#333;font-size:14px;font-weight:bold">${aqiData.aqi}</span>
+            </div>`,
+            iconSize: [40, 40],
+            iconAnchor: [20, 20]
+        });
+
+        const dominantPollutant = aqiData.dominant?.toUpperCase() || 'N/A';
+        
+        aqiMarker = L.marker([lat, lng], { icon: aqiIcon, title: `AQI: ${aqiData.aqi}` })
+            .bindPopup(`
+                <div style="min-width:220px">
+                    <div style="text-align:center;margin-bottom:10px">
+                        <div style="font-size:32px;font-weight:bold;color:${iconColor}">${aqiData.aqi}</div>
+                        <div style="font-size:14px;font-weight:600;color:${iconColor}">${category.label}</div>
+                    </div>
+                    <div style="font-size:12px;color:#666;margin-bottom:8px">${aqiData.city}</div>
+                    <div style="font-size:11px;color:#888;border-top:1px solid #eee;padding-top:8px">
+                        Dominant: <strong>${dominantPollutant}</strong><br>
+                        Time: ${new Date(aqiData.time).toLocaleString()}
+                    </div>
+                    ${aqiData.isDemo ? '<br><span style="font-size:10px;background:#FBBC05;padding:2px 6px;border-radius:4px">Demo Data</span>' : ''}
+                </div>
+            `)
+            .addTo(state.map);
+
+        state.map.setView([lat, lng], 12);
+    }
+
+    function showAQIPreview(aqiData, lat, lng) {
+        let previewPanel = document.getElementById('aqi-preview');
+        if (previewPanel) {
+            previewPanel.remove();
+        }
+
+        const category = getAQICategory(aqiData.aqi);
+        
+        previewPanel = document.createElement('div');
+        previewPanel.id = 'aqi-preview';
+        previewPanel.style.cssText = `
+            position: absolute; bottom: 20px; left: 20px; right: 350px;
+            background: var(--surface); border-radius: var(--radius);
+            padding: 16px; z-index: 500; box-shadow: var(--shadow);
+        `;
+
+        previewPanel.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                <h3 style="font-size:16px;display:flex;align-items:center;gap:10px">
+                    <i class="fas fa-wind" style="color:${category.color}"></i>
+                    Air Quality Index
+                    ${aqiData.isDemo ? '<span style="font-size:10px;background:#FBBC05;padding:2px 6px;border-radius:4px">Demo</span>' : ''}
+                </h3>
+                <button onclick="document.getElementById('aqi-preview').remove()" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:18px">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
+                <div style="text-align:center">
+                    <div style="font-size:48px;font-weight:bold;color:${category.color}">${aqiData.aqi}</div>
+                    <div style="font-size:14px;font-weight:600;color:${category.color}">${category.label}</div>
+                </div>
+                <div style="flex:1">
+                    <div style="font-size:12px;color:var(--text-secondary)">${category.desc}</div>
+                    <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">Location: ${aqiData.city}</div>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:12px">
+                ${aqiData.pm25 ? `<div style="background:var(--bg-light);padding:8px;border-radius:6px;text-align:center"><div style="color:var(--text-secondary)">PM2.5</div><div style="font-weight:600">${aqiData.pm25}</div></div>` : ''}
+                ${aqiData.pm10 ? `<div style="background:var(--bg-light);padding:8px;border-radius:6px;text-align:center"><div style="color:var(--text-secondary)">PM10</div><div style="font-weight:600">${aqiData.pm10}</div></div>` : ''}
+                ${aqiData.o3 ? `<div style="background:var(--bg-light);padding:8px;border-radius:6px;text-align:center"><div style="color:var(--text-secondary)">O3</div><div style="font-weight:600">${aqiData.o3}</div></div>` : ''}
+                ${aqiData.no2 ? `<div style="background:var(--bg-light);padding:8px;border-radius:6px;text-align:center"><div style="color:var(--text-secondary)">NO2</div><div style="font-weight:600">${aqiData.no2}</div></div>` : ''}
+                ${aqiData.so2 ? `<div style="background:var(--bg-light);padding:8px;border-radius:6px;text-align:center"><div style="color:var(--text-secondary)">SO2</div><div style="font-weight:600">${aqiData.so2}</div></div>` : ''}
+                ${aqiData.co ? `<div style="background:var(--bg-light);padding:8px;border-radius:6px;text-align:center"><div style="color:var(--text-secondary)">CO</div><div style="font-weight:600">${aqiData.co}</div></div>` : ''}
+            </div>
+            <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+                <div style="font-size:11px;color:var(--text-secondary)">
+                    <span style="color:#00e400">●</span> Good (0-50) 
+                    <span style="color:#ffff00">●</span> Moderate (51-100) 
+                    <span style="color:#ff7e00">●</span> Sensitive (101-150)
+                    <span style="color:#ff0000">●</span> Unhealthy (151+)
+                </div>
+            </div>
+        `;
+
+        document.getElementById('app').appendChild(previewPanel);
+    }
+
+    // =====================================================
+    // VOICE INPUT (Speech Recognition)
+    // =====================================================
+    let recognition = null;
+    let speechSynthesis = window.speechSynthesis;
+
+    function isSpeechRecognitionSupported() {
+        return 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
+    }
+
+    function isSpeechSynthesisSupported() {
+        return 'speechSynthesis' in window;
+    }
+
+    function initSpeechRecognition() {
+        try {
+            if (!isSpeechRecognitionSupported()) {
+                console.warn('Speech recognition not supported');
+                return null;
+            }
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            
+            recognition.continuous = false;
+            recognition.interimResults = true;
+            recognition.maxAlternatives = 1;
+
+            const langMap = {
+                'en': 'en-IN',
+                'ta': 'ta-IN',
+                'te': 'te-IN',
+                'hi': 'hi-IN'
+            };
+
+            recognition.lang = langMap[state.currentLang] || 'en-IN';
+
+            recognition.onstart = () => {
+                state.isListening = true;
+                document.getElementById('mic-btn').classList.add('listening');
+                showToast('Listening... Speak now', 'info');
+            };
+
+            recognition.onend = () => {
+                state.isListening = false;
+                document.getElementById('mic-btn').classList.remove('listening');
+            };
+
+            recognition.onresult = (event) => {
+                const results = event.results;
+                if (results && results.length > 0) {
+                    const result = results[results.length - 1];
+                    if (result.isFinal) {
+                        const transcript = result[0].transcript;
+                        document.getElementById('chat-input').value = transcript;
+                        processUserInput(transcript);
+                    } else {
+                        // Interim results
+                        document.getElementById('chat-input').value = result[0].transcript;
+                    }
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Speech recognition error:', event.error);
+                state.isListening = false;
+                document.getElementById('mic-btn').classList.remove('listening');
+                
+                const errorMessages = {
+                    'no-speech': 'No speech detected. Please try again.',
+                    'audio-capture': 'No microphone found.',
+                    'not-allowed': 'Microphone access denied. Please allow microphone access.',
+                    'network': 'Network error during speech recognition.',
+                    'aborted': 'Speech recognition stopped.',
+                    'failed': 'Speech recognition failed.'
+                };
+                
+                const msg = errorMessages[event.error] || `Voice error: ${event.error}`;
+                showToast(msg, 'error');
+            };
+
+            recognition.onnomatch = () => {
+                showToast('Could not understand. Please speak clearly.', 'error');
+            };
+
+            console.log('Speech recognition initialized');
+            return recognition;
+        } catch (error) {
+            console.error('Error initializing speech recognition:', error);
+            return null;
+        }
+    }
+
+    function startListening() {
+        // Check if supported
+        if (!isSpeechRecognitionSupported()) {
+            showToast('Speech recognition not supported in this browser. Try Chrome.', 'error');
+            return;
+        }
+
+        // Stop if already listening
+        if (state.isListening && recognition) {
+            recognition.stop();
+            return;
+        }
+
+        // Initialize or reinitialize
+        if (!recognition) {
+            recognition = initSpeechRecognition();
+        }
+
+        if (recognition) {
+            const langMap = {
+                'en': 'en-IN',
+                'ta': 'ta-IN',
+                'te': 'te-IN',
+                'hi': 'hi-IN'
+            };
+            recognition.lang = langMap[state.currentLang] || 'en-IN';
+
+            try {
+                recognition.start();
+            } catch (error) {
+                console.error('Failed to start recognition:', error);
+                // Try to restart
+                recognition = null;
+                recognition = initSpeechRecognition();
+                if (recognition) {
+                    try {
+                        recognition.lang = langMap[state.currentLang] || 'en-IN';
+                        recognition.start();
+                    } catch (e) {
+                        showToast('Could not start voice input', 'error');
+                    }
+                }
+            }
+        }
+    }
+
+    // =====================================================
+    // VOICE OUTPUT (Speech Synthesis)
+    // =====================================================
+    function speak(text) {
+        if (!state.voiceEnabled) return;
+        if (!isSpeechSynthesisSupported()) {
+            console.warn('Speech synthesis not supported');
+            return;
+        }
+
+        // Cancel any ongoing speech
+        speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        
+        // Set language
+        const langMap = {
+            'en': 'en-US',
+            'ta': 'ta-IN', 
+            'te': 'te-IN',
+            'hi': 'hi-IN'
+        };
+        utterance.lang = langMap[state.currentLang] || 'en-US';
+        utterance.rate = 0.95;
+        utterance.pitch = 1;
+        utterance.volume = 1;
+
+        // Try to get a voice for the language
+        const voices = speechSynthesis.getVoices();
+        const targetLang = utterance.lang;
+        
+        // Find matching voice
+        const matchingVoice = voices.find(v => v.lang.startsWith(targetLang.split('-')[0]));
+        if (matchingVoice) {
+            utterance.voice = matchingVoice;
+        }
+
+        // Error handling
+        utterance.onerror = (event) => {
+            console.error('Speech synthesis error:', event.error);
+        };
+
+        utterance.onend = () => {
+            console.log('Speech completed');
+        };
+
+        utterance.onstart = () => {
+            console.log('Speech started');
+        };
+
+        speechSynthesis.speak(utterance);
+    }
+
+    function stopSpeaking() {
+        if (speechSynthesis) {
+            speechSynthesis.cancel();
+        }
+    }
+
+    // Preload voices
+    if (isSpeechSynthesisSupported()) {
+        speechSynthesis.onvoiceschanged = () => {
+            console.log('Voices loaded:', speechSynthesis.getVoices().length);
+        };
+    }
+
+    // =====================================================
+    // TRANSLATION (with fallback)
+    // =====================================================
+    async function translateText(text, from = 'auto', to = 'en') {
+        // If same language, return as-is
+        if (from === to || from === 'en') return text;
+        
+        try {
+            // Using MyMemory Translation API
+            const response = await fetch(
+                `${CONFIG.translation}/get?q=${encodeURIComponent(text)}&langpair=${from}|${to}`,
+                { timeout: 5000 }
+            );
+            
+            if (!response.ok) throw new Error('Translation API error');
+            
+            const data = await response.json();
+            if (data.responseStatus === 200 && data.responseData) {
+                return data.responseData.translatedText;
+            }
+            return text;
+        } catch (error) {
+            console.warn('Translation failed, using original text:', error);
+            return text;
+        }
+    }
+
+    // =====================================================
+    // CHATBOT LOGIC
+    // =====================================================
+    async function processUserInput(input) {
+        const messages = document.getElementById('chat-messages');
+
+        // Add user message
+        messages.innerHTML += `<div class="message user">${input}</div>`;
+
+        // Show typing indicator
+        const typingId = 'typing-' + Date.now();
+        messages.innerHTML += `<div class="message bot" id="${typingId}">${t('processing')}</div>`;
+        messages.scrollTop = messages.scrollHeight;
+
+        let response = '';
+
+        // Translate to English if not English (with fallback)
+        let processedInput = input;
+        if (state.currentLang !== 'en') {
+            try {
+                processedInput = await translateText(input, state.currentLang, 'en');
+            } catch (e) {
+                console.warn('Translation failed, using original input');
+                processedInput = input;
+            }
+        }
+
+        const lowerInput = processedInput.toLowerCase().trim();
+        const originalLower = input.toLowerCase().trim();
+
+        // Route planning
+        if (lowerInput.includes('route') || lowerInput.includes('navigat') || lowerInput.includes('directions') ||
+            originalLower.includes('வழி') || originalLower.includes('रास्ता') || originalLower.includes('మార్గం')) {
+            response = t('askRoute');
+            document.getElementById('navigation-panel').classList.add('show');
+        }
+        // Location
+        else if (lowerInput.includes('where am i') || lowerInput.includes('my location') || 
+                 originalLower.includes('என் இடம்') || originalLower.includes('मेरा स्थान')) {
+            try {
+                const loc = await getUserLocation();
+                showUserOnMap(loc.lat, loc.lng);
+                response = t('locationDetected', { lat: loc.lat.toFixed(4), lng: loc.lng.toFixed(4) });
+            } catch (e) {
+                response = t('locationDenied');
+            }
+        }
+        // Load and show accident data
+        else if (lowerInput.includes('accident') || lowerInput.includes('crash') || 
+                 originalLower.includes('விபத்து') || originalLower.includes('दुर्घटना') ||
+                 originalLower.includes('ప్రమాదం') || lowerInput.includes('hotspot') ||
+                 lowerInput.includes('show') || lowerInput.includes('map')) {
+            
+            if (state.accidentData.length === 0) {
+                await loadAccidentData();
+            }
+
+            let filtered = [...state.accidentData];
+
+            // Apply filters
+            if (lowerInput.includes('fatal') || originalLower.includes('உயிர்ப்ப') || originalLower.includes('घातक')) {
+                filtered = filtered.filter(f => f.properties.severity === 'Fatal');
+            } else if (lowerInput.includes('major') || originalLower.includes('பெரும்') || originalLower.includes('बड़ा')) {
+                filtered = filtered.filter(f => f.properties.severity === 'Major');
+            } else if (lowerInput.includes('minor') || originalLower.includes('சிறு') || originalLower.includes('छोटा')) {
+                filtered = filtered.filter(f => f.properties.severity === 'Minor');
+            }
+
+            // Filter by district
+            const districts = ['chennai', 'coimbatore', 'madurai', 'tiruchirappalli', 'salem', 'vellore'];
+            for (const d of districts) {
+                if (lowerInput.includes(d) || originalLower.includes(d)) {
+                    filtered = filtered.filter(f => 
+                        (f.properties.district || '').toLowerCase().includes(d)
+                    );
+                }
+            }
+
+            displayAccidents(filtered);
+
+            const fatal = filtered.filter(f => f.properties.severity === 'Fatal').length;
+            const major = filtered.filter(f => f.properties.severity === 'Major').length;
+            const minor = filtered.filter(f => f.properties.severity === 'Minor').length;
+
+            if (filtered.length === 0) {
+                response = t('noResults');
+            } else {
+                response = t('accidentData', { 
+                    count: filtered.length, 
+                    fatal, major, minor 
+                });
+
+                // Find hotspots
+                const byDistrict = {};
+                filtered.forEach(f => {
+                    const d = f.properties.district;
+                    byDistrict[d] = (byDistrict[d] || 0) + 1;
+                });
+                const top = Object.entries(byDistrict).sort((a, b) => b[1] - a[1])[0];
+                if (top) {
+                    response += ' ' + t('hotspotArea', { area: top[0] });
+                }
+            }
+        }
+        // Nearest hospital/emergency
+        else if (lowerInput.includes('hospital') || lowerInput.includes('nearest') ||
+                 originalLower.includes('ஆஸ்பத்திரி') || originalLower.includes('अस्पताल') ||
+                 originalLower.includes('హాస్పిటల్') || lowerInput.includes('medical') ||
+                 lowerInput.includes('clinic') || lowerInput.includes('emergency')) {
+            try {
+                let loc;
+                try {
+                    loc = state.userLocation || await getUserLocation();
+                    state.userLocation = loc;
+                    showUserOnMap(loc.lat, loc.lng);
+                } catch (locErr) {
+                    loc = { lat: 13.0827, lng: 80.2707 };
+                    state.userLocation = loc;
+                    showToast('Using default location (Chennai)', 'info');
+                }
+                
+                showToast('Searching for nearby hospitals...', 'info');
+                const hospitals = await findNearbyHospitals(loc.lat, loc.lng, 10);
+                
+                if (hospitals && hospitals.length > 0) {
+                    displayHospitals(hospitals, loc.lat, loc.lng);
+                    showHospitalPreview(hospitals, loc.lat, loc.lng);
+                    
+                    const isDemo = hospitals[0].isDemo;
+                    const nearest = hospitals[0];
+                    const route = await calculateRoute(loc, { lat: nearest.lat, lng: nearest.lng });
+                    
+                    if (isDemo) {
+                        response = `Found <strong>${hospitals.length} medical facilities</strong> near your location (demo data).<br>`;
+                        response += `Nearest: <strong>${nearest.name}</strong> (${nearest.distance.toFixed(1)} km away).<br>`;
+                        response += `<small style="color:var(--text-secondary)">Note: Using demo locations. Real hospital data unavailable.</small>`;
+                    } else {
+                        response = `Found <strong>${hospitals.length} medical facilities</strong> near your location!<br>`;
+                        response += `Nearest: <strong>${nearest.name}</strong> (${nearest.distance.toFixed(1)} km away)`;
+                    }
+                    
+                    if (route) {
+                        displayRoute(route);
+                        displayNavigationSteps(route.steps);
+                        document.getElementById('navigation-panel').classList.add('show');
+                    }
+                    
+                    showToast(isDemo ? 'Showing demo hospital locations' : `Found ${hospitals.length} hospitals`, 'success');
+                } else {
+                    response = 'No hospitals found within 10km of your location. Try searching in a different area.';
+                    showToast('No hospitals found nearby', 'info');
+                }
+            } catch (e) {
+                console.error('Hospital search error:', e);
+                const loc = state.userLocation || { lat: 13.0827, lng: 80.2707 };
+                const hospitals = getDemoHospitals(loc.lat, loc.lng);
+                displayHospitals(hospitals, loc.lat, loc.lng);
+                showHospitalPreview(hospitals, loc.lat, loc.lng);
+                response = `Showing <strong>${hospitals.length} demo hospital locations</strong> due to technical issues.<br><small style="color:var(--text-secondary)">Could not fetch real hospital data.</small>`;
+            }
+        }
+        // Air Quality Index
+        else if (lowerInput.includes('aqi') || lowerInput.includes('air quality') || 
+                 lowerInput.includes('air pollution') || lowerInput.includes('pollution') ||
+                 originalLower.includes('காற்று') || originalLower.includes('वायु') ||
+                 lowerInput.includes('smog') || lowerInput.includes(' pm ')) {
+            try {
+                let loc;
+                try {
+                    loc = state.userLocation || await getUserLocation();
+                    state.userLocation = loc;
+                    showUserOnMap(loc.lat, loc.lng);
+                } catch (locErr) {
+                    loc = { lat: 13.0827, lng: 80.2707 };
+                    state.userLocation = loc;
+                    showToast('Using default location (Chennai)', 'info');
+                }
+                
+                showToast('Fetching air quality data...', 'info');
+                const aqiData = await fetchAQI(loc.lat, loc.lng);
+                
+                if (aqiData) {
+                    displayAQIMarker(aqiData, loc.lat, loc.lng);
+                    showAQIPreview(aqiData, loc.lat, loc.lng);
+                    
+                    const category = getAQICategory(aqiData.aqi);
+                    
+                    if (aqiData.isDemo) {
+                        response = `Air Quality Index: <strong style="color:${category.color}">${aqiData.aqi}</strong> (${category.label})<br>`;
+                        response += `<small style="color:var(--text-secondary)">Note: Using demo data. Real-time AQI unavailable.</small>`;
+                    } else {
+                        response = `Air Quality Index: <strong style="color:${category.color}">${aqiData.aqi}</strong> (${category.label})<br>`;
+                        response += `Location: <strong>${aqiData.city}</strong><br>`;
+                        response += `<small style="color:var(--text-secondary)">${category.desc}</small>`;
+                    }
+                    
+                    showToast(aqiData.isDemo ? 'AQI: Demo data shown' : `AQI: ${aqiData.aqi} - ${category.label}`, 'success');
+                } else {
+                    response = 'Could not fetch air quality data. Please try again.';
+                    showToast('AQI fetch failed', 'error');
+                }
+            } catch (e) {
+                console.error('AQI fetch error:', e);
+                const loc = state.userLocation || { lat: 13.0827, lng: 80.2707 };
+                const aqiData = getFallbackAQI(loc.lat, loc.lng);
+                displayAQIMarker(aqiData, loc.lat, loc.lng);
+                showAQIPreview(aqiData, loc.lat, loc.lng);
+                const category = getAQICategory(aqiData.aqi);
+                response = `AQI: <strong style="color:${category.color}">${aqiData.aqi}</strong> (Demo data)<br><small style="color:var(--text-secondary)">Real-time data unavailable</small>`;
+            }
+        }
+        // Help
+        else if (lowerInput.includes('help') || lowerInput.includes('commands') || originalLower.includes('உதவி')) {
+            response = `Available commands:
+• "Show accidents" / "விபத்துகளை காட்டு" - Show accident data
+• "Fatal accidents" - Show fatal accidents only
+• "Route from A to B" - Plan a route
+• "Where am I" - Show your location
+• "Find hospitals" or "Nearest hospital" - Find nearby hospitals
+• "AQI" or "air quality" - Check air quality index
+• "Hotspots" - Show accident hotspots`;
+        }
+        // Default
+        else {
+            response = `I can help you with:
+• Accident data analysis
+• Route planning
+• Location services
+• GIS queries
+
+Try: "Show accidents" or "Route from Chennai to Coimbatore"`;
+        }
+
+        // Remove typing indicator
+        document.getElementById(typingId)?.remove();
+
+        // Add bot response
+        const safeResponse = response.replace(/'/g, "\\'");
+        const responseHtml = `<div class="message bot">${response}<span class="voice-toggle" onclick="speak(\`${safeResponse}\`)"><i class="fas fa-volume-up"></i></span></div>`;
+        messages.innerHTML += responseHtml;
+        messages.scrollTop = messages.scrollHeight;
+
+        // Speak response if voice enabled
+        if (state.voiceEnabled) {
+            speak(response);
+        }
+
+        // Save to history
+        const currentMessages = [];
+        messages.querySelectorAll('.message').forEach(msg => {
+            const type = msg.classList.contains('user') ? 'user' : 'bot';
+            let content = msg.innerHTML;
+            if (type === 'bot') {
+                content = content.replace(/<span class="voice-toggle"[^>]*>.*?<\/span>/g, '');
+            }
+            currentMessages.push({ type, content });
+        });
+        saveCurrentSession(currentMessages);
+    }
+
+    // =====================================================
+    // EVENT LISTENERS
+    // =====================================================
+    document.addEventListener('DOMContentLoaded', () => {
+        initMap();
+        
+        // Initialize speech recognition
+        const srSupported = isSpeechRecognitionSupported();
+        const ssSupported = isSpeechSynthesisSupported();
+        
+        if (srSupported) {
+            initSpeechRecognition();
+            console.log('Speech Recognition: Supported');
+        } else {
+            console.log('Speech Recognition: Not Supported');
+            document.getElementById('mic-btn').title = 'Speech recognition not supported';
+            document.getElementById('mic-btn').style.opacity = '0.5';
+        }
+        
+        if (ssSupported) {
+            console.log('Speech Synthesis: Supported');
+        } else {
+            console.log('Speech Synthesis: Not Supported');
+            document.getElementById('voice-toggle').style.opacity = '0.5';
+        }
+
+        // Language selector
+        document.querySelectorAll('.lang-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                state.currentLang = btn.dataset.lang;
+                showToast(`Language: ${LANGUAGES[state.currentLang].name}`, 'info');
+            });
+        });
+
+        // Chat input
+        const chatInput = document.getElementById('chat-input');
+        const sendBtn = document.getElementById('send-btn');
+
+        sendBtn.addEventListener('click', () => {
+            const text = chatInput.value.trim();
+            if (text) {
+                processUserInput(text);
+                chatInput.value = '';
+            }
+        });
+
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const text = chatInput.value.trim();
+                if (text) {
+                    processUserInput(text);
+                    chatInput.value = '';
+                }
+            }
+        });
+
+        // Mic button - start/stop listening
+        document.getElementById('mic-btn').addEventListener('click', () => {
+            if (!srSupported) {
+                showToast('Speech recognition not supported in this browser. Try Chrome.', 'error');
+                return;
+            }
+            startListening();
+        });
+
+        // Voice toggle
+        document.getElementById('voice-toggle').addEventListener('click', (e) => {
+            if (!ssSupported) {
+                showToast('Speech synthesis not supported in this browser.', 'error');
+                return;
+            }
+            state.voiceEnabled = !state.voiceEnabled;
+            e.currentTarget.classList.toggle('active', state.voiceEnabled);
+            
+            if (state.voiceEnabled) {
+                // Test voice
+                speak('Voice output enabled');
+            }
+            
+            showToast(state.voiceEnabled ? t('voiceEnabled') : t('voiceDisabled'), 'info');
+        });
+
+        // Location button
+        document.getElementById('location-btn').addEventListener('click', async () => {
+            try {
+                const loc = await getUserLocation();
+                showUserOnMap(loc.lat, loc.lng);
+                showToast(t('locationDetected', { lat: loc.lat.toFixed(4), lng: loc.lng.toFixed(4) }), 'success');
+            } catch (e) {
+                showToast(t('locationDenied'), 'error');
+            }
+        });
+
+        // Hospital button
+        document.getElementById('hospital-btn').addEventListener('click', async () => {
+            try {
+                showToast('Getting your location...', 'info');
+                let loc;
+                try {
+                    loc = state.userLocation || await getUserLocation();
+                    state.userLocation = loc;
+                    showUserOnMap(loc.lat, loc.lng);
+                } catch (locErr) {
+                    console.log('Using default location (Chennai)');
+                    loc = { lat: 13.0827, lng: 80.2707 };
+                    state.userLocation = loc;
+                    showToast('Using default location (Chennai)', 'info');
+                }
+                
+                showToast('Searching for nearby hospitals...', 'info');
+                const hospitals = await findNearbyHospitals(loc.lat, loc.lng, 10);
+                
+                if (hospitals && hospitals.length > 0) {
+                    displayHospitals(hospitals, loc.lat, loc.lng);
+                    showHospitalPreview(hospitals, loc.lat, loc.lng);
+                    const isDemo = hospitals[0].isDemo;
+                    showToast(isDemo ? `Showing ${hospitals.length} demo locations` : `Found ${hospitals.length} hospitals`, 'success');
+                } else {
+                    showToast('No hospitals found within 10km', 'info');
+                }
+            } catch (e) {
+                console.error('Hospital search error:', e);
+                showToast('Could not find hospitals. Using demo data.', 'info');
+                
+                const loc = state.userLocation || { lat: 13.0827, lng: 80.2707 };
+                const hospitals = getDemoHospitals(loc.lat, loc.lng);
+                displayHospitals(hospitals, loc.lat, loc.lng);
+                showHospitalPreview(hospitals, loc.lat, loc.lng);
+                showToast(`Showing ${hospitals.length} demo hospital locations`, 'info');
+            }
+        });
+
+        // AQI button
+        document.getElementById('aqi-btn').addEventListener('click', async () => {
+            try {
+                showToast('Getting your location...', 'info');
+                let loc;
+                try {
+                    loc = state.userLocation || await getUserLocation();
+                    state.userLocation = loc;
+                    showUserOnMap(loc.lat, loc.lng);
+                } catch (locErr) {
+                    console.log('Using default location (Chennai)');
+                    loc = { lat: 13.0827, lng: 80.2707 };
+                    state.userLocation = loc;
+                    showToast('Using default location (Chennai)', 'info');
+                }
+                
+                showToast('Fetching air quality data...', 'info');
+                const aqiData = await fetchAQI(loc.lat, loc.lng);
+                
+                if (aqiData) {
+                    displayAQIMarker(aqiData, loc.lat, loc.lng);
+                    showAQIPreview(aqiData, loc.lat, loc.lng);
+                    const category = getAQICategory(aqiData.aqi);
+                    showToast(aqiData.isDemo ? 'AQI: Demo data shown' : `AQI: ${aqiData.aqi} - ${category.label}`, 'success');
+                } else {
+                    showToast('Could not fetch AQI data', 'error');
+                }
+            } catch (e) {
+                console.error('AQI fetch error:', e);
+                const loc = state.userLocation || { lat: 13.0827, lng: 80.2707 };
+                const aqiData = getFallbackAQI(loc.lat, loc.lng);
+                displayAQIMarker(aqiData, loc.lat, loc.lng);
+                showAQIPreview(aqiData, loc.lat, loc.lng);
+                showToast('Showing demo AQI data', 'info');
+            }
+        });
+
+        // Route button
+        document.getElementById('route-btn').addEventListener('click', () => {
+            document.getElementById('navigation-panel').classList.toggle('show');
+        });
+
+        // Navigation panel close
+        document.getElementById('nav-close').addEventListener('click', () => {
+            document.getElementById('navigation-panel').classList.remove('show');
+        });
+
+        // Calculate route
+        document.getElementById('calc-route').addEventListener('click', async () => {
+            const startInput = document.getElementById('route-start').value;
+            const endInput = document.getElementById('route-end').value;
+
+            if (!startInput || !endInput) {
+                showToast('Please enter both start and end locations', 'error');
+                return;
+            }
+
+            showLoading(true);
+            const startLoc = await geocode(startInput);
+            const endLoc = await geocode(endInput);
+            showLoading(false);
+
+            if (!startLoc || !endLoc) {
+                showToast('Could not find one or both locations', 'error');
+                return;
+            }
+
+            const route = await calculateRoute(startLoc, endLoc);
+            if (route) {
+                displayRoute(route);
+                displayNavigationSteps(route.steps);
+                showToast(t('routeFound', { 
+                    distance: formatDistance(route.distance), 
+                    duration: formatDuration(route.duration) 
+                }), 'success');
+                speak(t('routeFound', { 
+                    distance: formatDistance(route.distance), 
+                    duration: formatDuration(route.duration) 
+                }));
+            } else {
+                showToast(t('noRoute'), 'error');
+            }
+        });
+
+        // Clear button
+        document.getElementById('clear-btn').addEventListener('click', () => {
+            if (state.accidentLayer) {
+                state.map.removeLayer(state.accidentLayer);
+            }
+            if (state.routeLayer) {
+                state.map.removeLayer(state.routeLayer);
+            }
+            state.map.setView(CONFIG.map.center, CONFIG.map.zoom);
+            showToast('Map cleared', 'info');
+        });
+
+        // History button
+        document.getElementById('history-btn').addEventListener('click', () => {
+            document.getElementById('history-panel').classList.add('show');
+            updateHistoryUI();
+        });
+
+        // History panel close
+        document.getElementById('history-close').addEventListener('click', () => {
+            document.getElementById('history-panel').classList.remove('show');
+        });
+
+        // New session button
+        document.getElementById('new-session-btn').addEventListener('click', () => {
+            document.getElementById('history-panel').classList.remove('show');
+            startNewSession();
+        });
+
+        // Load accident data on startup
+        loadAccidentData();
+
+        showToast('App ready!', 'success');
+    });
+    </script>
+</body>
+</html>
